@@ -1,22 +1,21 @@
 package com.myorg;
 
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
 import software.amazon.awscdk.core.*;
 import software.amazon.awscdk.services.cognito.*;
 import software.amazon.awscdk.services.ec2.EbsDeviceVolumeType;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
 import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.opensearchservice.*;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.UUID;
 
-@EqualsAndHashCode(callSuper = false)
-@Data
 public class DashboardsOpenSearchStack extends Stack {
     private Domain openSearchDomain;
     private CfnParameter dataNodeEBSVolumeSize;
@@ -32,6 +31,21 @@ public class DashboardsOpenSearchStack extends Stack {
     public DashboardsOpenSearchStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
+        createParameters();
+        deployOpenSearch();
+
+        DashboardsFirehoseStack firehoseStack = new DashboardsFirehoseStack(this, "waf-dashboards-firehose-stack", new FirehoseNestedStackProps(this.openSearchDomain));
+
+        DashboardsAppStack dashboardsAppStack = new DashboardsAppStack(this, "awafd-app-stack", NestedStackProps.builder().build());
+
+        CfnOutput output = CfnOutput.Builder.create(this, "DashboardsLink")
+                .description("Your link to the OpenSearch WAF Dashboard")
+                .value("https://" + openSearchDomain.getDomainEndpoint() + "/_dashboards")
+                .build();
+
+    }
+
+    private void createParameters() {
         this.dataNodeEBSVolumeSize = CfnParameter.Builder.create(this, "dataNodeEBSVolumeSize")
                 .type("Number")
                 .defaultValue("10")
@@ -63,7 +77,9 @@ public class DashboardsOpenSearchStack extends Stack {
                 //todo lowercase only allowed
                 .description("Name for Cognito Domain")
                 .build();
+    }
 
+    private void deployOpenSearch() {
         IManagedPolicy awsOpenSearchCognitoAccessPolicy = ManagedPolicy.fromAwsManagedPolicyName("AmazonOpenSearchServiceCognitoAccess");
 
         UserPool userPool = UserPool.Builder.create(this, "UserPool")
@@ -169,14 +185,6 @@ public class DashboardsOpenSearchStack extends Stack {
                 .accessPolicies(Collections.singletonList(openSearchPolicy))
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
-
-
-        CfnOutput output = CfnOutput.Builder.create(this, "DashboardsLink")
-                .description("Your link to the OpenSearch WAF Dashboard")
-                .value("https://" + openSearchDomain.getDomainEndpoint() + "/_dashboards")
-                .build();
-
-
     }
 
 

@@ -1,7 +1,6 @@
 package com.myorg;
 
 import software.amazon.awscdk.core.App;
-import software.amazon.awscdk.core.Stack;
 import software.amazon.awscdk.core.StackProps;
 
 public class CdkAwsWafDashboardsApp {
@@ -39,7 +38,7 @@ public class CdkAwsWafDashboardsApp {
 
 
         DashboardsOpenSearchStack openSearch = new DashboardsOpenSearchStack(app, "DashboardsOpenSearchStack", StackProps.builder().build());
-        Stack firehose = new DashboardsFirehoseStack(this, "DashboardsFirehoseStack", new OpenSearchProperties(this));
+        //Stack firehose = new DashboardsFirehoseStack(this, "DashboardsFirehoseStack", new FirehoseNestedStackProps(this).);
 
         app.synth();
     }

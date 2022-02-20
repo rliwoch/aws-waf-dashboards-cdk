@@ -53,7 +53,6 @@ public class DashboardsFirehoseStack extends NestedStack {
                         .build())
                 .domainArn(firehoseNestedStackProps.getOpenSearchDomain().getDomainArn())
                 .indexName(wafIndexName)
-                //.typeName(wafIndexTypeName)
                 .indexRotationPeriod("OneDay")
                 .retryOptions(CfnDeliveryStream.ElasticsearchRetryOptionsProperty.builder().durationInSeconds(60).build())
                 .roleArn(this.firehoseRole.getRoleArn())
@@ -87,6 +86,11 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .value(firehoseNestedStackProps.getOpenSearchDomain().getDomainArn())
                 .build();
 
+        CfnOutput firehoseArn = CfnOutput.Builder.create(this, "FirehoseArn")
+                .description("Firehose ARN")
+                .value(wafLogsDeliveryStream.getAttrArn())
+                .build();
+
     }
 
     public void createLoggingConfiguration() {
@@ -112,6 +116,7 @@ public class DashboardsFirehoseStack extends NestedStack {
     public Role generateFirehoseRole(FirehoseNestedStackProps firehoseNestedStackProps, Bucket logDeliveryBucket) {
         Role firehoseRole = Role.Builder.create(this, "wafLogsDeliveryStreamRole")
                 .roleName("waf-dashboard-wafLogsDeliveryStream")
+                .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AdministratorAccess"))) //todo
                 .description("Role for WAF Dashboards log delivery")
                 .assumedBy(new ServicePrincipal("firehose.amazonaws.com"))
                 .build();
@@ -119,7 +124,7 @@ public class DashboardsFirehoseStack extends NestedStack {
         ManagedPolicy.Builder.create(this, "firehosePolicy")
                 .statements(generatePolicyStatements(firehoseNestedStackProps.getOpenSearchDomain(), logDeliveryBucket))
                 .managedPolicyName("waf-dashboards-firehose-policy")
-                .roles(List.of(firehoseRole))
+                .roles(List.of(firehoseRole))//todo
                 .build();
 
         return firehoseRole;

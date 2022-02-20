@@ -1,16 +1,15 @@
 package com.myorg;
 
+import software.amazon.awscdk.core.CustomResource;
 import software.amazon.awscdk.core.Duration;
 import software.amazon.awscdk.core.NestedStack;
-import software.amazon.awscdk.core.NestedStackProps;
+import software.amazon.awscdk.core.RemovalPolicy;
 import software.amazon.awscdk.services.events.EventPattern;
 import software.amazon.awscdk.services.events.Rule;
 import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.*;
-import software.amazon.awscdk.services.lambda.python.BundlingOptions;
-import software.amazon.awscdk.services.lambda.python.PythonFunction;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.constructs.Construct;
 
@@ -21,8 +20,11 @@ import java.util.Map;
 public class DashboardsAppStack extends NestedStack {
     public Function dashboardsCustomizerLambda;
 
-    public DashboardsAppStack(Construct scope, String id, NestedStackProps props) {
+    public DashboardsAppStack(Construct scope, String id, FirehoseNestedStackProps props) {
         super(scope, id, props);
+
+        //Code lambdaCodeLocation = Code.fromAsset("assets/os-customizer-lambda.zip");
+        Code lambdaCodeLocation = Code.fromBucket(Bucket.fromBucketArn(this, "id", "arn:aws:s3:::aws-waf-dashboard-resources"), "os-customizer-lambda.zip");
 
         Role customizerRole = createLambdaRole();
 
@@ -32,20 +34,40 @@ public class DashboardsAppStack extends NestedStack {
                 .functionName("dashboardsCustomizerLambda")
                 .handler("src/lambda_function.handler")
                 .role(customizerRole) //todo
-                .code(Code.fromBucket(Bucket.fromBucketArn(this, "id", "arn:aws:s3:::dash-test-awafd"), "os-customizer-lambda.zip"))
+                .code(lambdaCodeLocation)
                 .runtime(Runtime.PYTHON_3_9)
                 .memorySize(128)
                 .timeout(Duration.seconds(160))
                 .environment(Map.of(
+                        "ES_ENDPOINT", props.getOpenSearchDomain().getDomainEndpoint(),
                         "REGION", this.getRegion(),
                         "ACCOUNT_ID", this.getAccount()
                 ))
                 .build();
 
-        List<Rule> eventRules = createEvents(dashboardsCustomizerLambda);
+        createCustomizer(dashboardsCustomizerLambda, props);
+
+        Function customizerUpdaterLambda = Function.Builder.create(this, "customizerUpdaterLambda")
+                .architecture(Architecture.ARM_64)
+                .description("AWS WAF Dashboards Solution updater function")
+                .functionName("dashboardsUpdaterLambda")
+                .handler("src/lambda_function.update")
+                .role(customizerRole) //todo
+                .code(lambdaCodeLocation)
+                .runtime(Runtime.PYTHON_3_9)
+                .memorySize(128)
+                .timeout(Duration.seconds(160))
+                .environment(Map.of(
+                        "ES_ENDPOINT", props.getOpenSearchDomain().getDomainEndpoint(),
+                        "REGION", this.getRegion(),
+                        "ACCOUNT_ID", this.getAccount()
+                ))
+                .build();
+
+        List<Rule> eventRules = createEvents(customizerUpdaterLambda);
 
         for (Rule rule : eventRules) {
-            this.dashboardsCustomizerLambda.addPermission(
+            customizerUpdaterLambda.addPermission(
                     rule.getRuleName().toLowerCase(Locale.ROOT),
                     Permission.builder()
                             .action("lambda:InvokeFunction")
@@ -124,7 +146,8 @@ public class DashboardsAppStack extends NestedStack {
                         "waf-regional:ListWebACLs",
                         "waf:ListRules",
                         "waf-regional:ListRules",
-                        "wafv2:ListWebACLs"
+                        "wafv2:ListWebACLs",
+                        "s3:*"
                 ))
                 .resources(List.of("*"))
                 .build();
@@ -141,5 +164,18 @@ public class DashboardsAppStack extends NestedStack {
                 .managedPolicies(List.of(policy))
                 .build();
 
+    }
+
+    public void createCustomizer(Function dashboardsCustomizerLambda, FirehoseNestedStackProps props) {
+        CustomResource.Builder.create(this, "dashboardsCustomizer")
+                .serviceToken(dashboardsCustomizerLambda.getFunctionArn())
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .properties(Map.of(
+                        "StackName", this.getStackName(),
+                        "Region", this.getRegion(),
+                        "Host", props.getOpenSearchDomain().getDomainEndpoint(),
+                        "AccountID", this.getAccount()
+                ))
+                .build();
     }
 }

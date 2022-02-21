@@ -34,8 +34,7 @@ public class DashboardsFirehoseStack extends NestedStack {
 
         createLoggingConfiguration();
 
-        Bucket logDeliveryBucket = Bucket.Builder.create(this, "waf-logDeliveryBucket")
-                .bucketName("waf-log-delivery-bucket-" + UUID.randomUUID().toString())
+        Bucket logDeliveryBucket = Bucket.Builder.create(this, "osdfwLogBucket")
                 .removalPolicy(RemovalPolicy.RETAIN)
                 .build();
 
@@ -75,18 +74,18 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .build();
 
 
-        CfnDeliveryStream wafLogsDeliveryStream = CfnDeliveryStream.Builder.create(this, "wafLogsDeliveryStream")
-                .deliveryStreamName("waf-logs-delivery-stream") //todo parematerise
+        CfnDeliveryStream wafLogsDeliveryStream = CfnDeliveryStream.Builder.create(this, "osdfwWafFirehoseDeliveryStream")
+                //.deliveryStreamName("waf-logs-delivery-stream") //todo parematerise
                 .deliveryStreamType("DirectPut")
                 .elasticsearchDestinationConfiguration(openSearchDestinationForFirehose)
                 .build();
 
 
-        CfnOutput output = CfnOutput.Builder.create(this, "var")
+        CfnOutput output = CfnOutput.Builder.create(this, "osdfwVarOsDomain")
                 .value(firehoseNestedStackProps.getOpenSearchDomain().getDomainArn())
                 .build();
 
-        CfnOutput firehoseArn = CfnOutput.Builder.create(this, "FirehoseArn")
+        CfnOutput firehoseArn = CfnOutput.Builder.create(this, "osdfwFirehoseArn")
                 .description("Firehose ARN")
                 .value(wafLogsDeliveryStream.getAttrArn())
                 .build();
@@ -94,36 +93,31 @@ public class DashboardsFirehoseStack extends NestedStack {
     }
 
     public void createLoggingConfiguration() {
-        this.cwLogGroup = LogGroup.Builder.create(this, "wafLogsDeliveryStreamCW")
-                .logGroupName("wafLogsDeliveryStreamCW")
+        this.cwLogGroup = LogGroup.Builder.create(this, "osdfwFirehose")
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .retention(RetentionDays.ONE_MONTH)
                 .build();
 
-        this.s3logStream = LogStream.Builder.create(this, "s3LogStream")
+        this.s3logStream = LogStream.Builder.create(this, "osdfwS3Delivery")
                 .logGroup(cwLogGroup)
-                .logStreamName("s3-delivery-log")
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        this.openSearchStream = LogStream.Builder.create(this, "openSearchLogStream")
+        this.openSearchStream = LogStream.Builder.create(this, "osdfwOsDelivery")
                 .logGroup(cwLogGroup)
-                .logStreamName("openSearch-delivery-log")
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
 
     public Role generateFirehoseRole(FirehoseNestedStackProps firehoseNestedStackProps, Bucket logDeliveryBucket) {
-        Role firehoseRole = Role.Builder.create(this, "wafLogsDeliveryStreamRole")
-                .roleName("waf-dashboard-wafLogsDeliveryStream")
+        Role firehoseRole = Role.Builder.create(this, "osdfwLogDeliveryRole")
                 .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AdministratorAccess"))) //todo
                 .description("Role for WAF Dashboards log delivery")
                 .assumedBy(new ServicePrincipal("firehose.amazonaws.com"))
                 .build();
 
-        ManagedPolicy.Builder.create(this, "firehosePolicy")
+        ManagedPolicy.Builder.create(this, "osdfwFirehosePolicy")
                 .statements(generatePolicyStatements(firehoseNestedStackProps.getOpenSearchDomain(), logDeliveryBucket))
-                .managedPolicyName("waf-dashboards-firehose-policy")
                 .roles(List.of(firehoseRole))//todo
                 .build();
 
@@ -132,7 +126,7 @@ public class DashboardsFirehoseStack extends NestedStack {
 
     public List<PolicyStatement> generatePolicyStatements(Domain openSearchDomain, Bucket firehoseDeliveryBucket) {
         PolicyStatement s3AccessStatement = PolicyStatement.Builder.create()
-                .sid("s3AccessStatement")
+                .sid("osdfwS3AccessStatement")
                 .effect(Effect.ALLOW)
                 .actions(List.of(
                         "s3:AbortMultipartUpload",
@@ -148,7 +142,7 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .build();
 
         PolicyStatement openSearchPutAccessStatement = PolicyStatement.Builder.create()
-                .sid("openSearchPutAccessStatement")
+                .sid("osdfwOpenSearchPutAccessStatement")
                 .effect(Effect.ALLOW)
                 .actions(List.of(
                         "es:DescribeElasticsearchDomain",
@@ -162,7 +156,7 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .build();
 
         PolicyStatement openSearchMiscGetAccessStatement = PolicyStatement.Builder.create()
-                .sid("openSearchMiscGetAccessStatement")
+                .sid("osdfwOpenSearchMiscAccessStatement")
                 .effect(Effect.ALLOW)
                 .actions(List.of("es:ESHttpGet"))
                 .resources(List.of(
@@ -177,14 +171,14 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .build();
 
         PolicyStatement cwLogDeliveryAccessStatement = PolicyStatement.Builder.create()
-                .sid("cwLogDeliveryAccessStatement")
+                .sid("osdfwLogDeliveryAccessStatement")
                 .effect(Effect.ALLOW)
                 .actions(List.of("logs:PutLogEvents"))
                 .resources(List.of(this.cwLogGroup.getLogGroupArn() + ":*"))
                 .build();
 
         PolicyStatement admin = PolicyStatement.Builder.create()
-                .sid("adminAS")
+                .sid("osdfwAdminAccessStatement")
                 .effect(Effect.ALLOW)
                 .actions(List.of("*"))
                 .resources(List.of("*"))

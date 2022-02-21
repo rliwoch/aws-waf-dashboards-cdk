@@ -14,13 +14,6 @@ import java.util.Collections;
 import java.util.Map;
 
 public class DashboardsOpenSearchStack extends Stack {
-    private static String NAME_PREFIX = "WAFD";
-    private static String DOMAIN_SETTER = "DomainSetter";
-    private static String COGNITO_USER_POOL_NAME = "Users";
-    private static String COGNITO_IDENTITY_POOL_NAME = "IdentityPool";
-    private static String COGNITO_AUTHENTICATED_IP_ROLE_NAME = "AuthenticatedRole";
-    private static String COGNITO_AUTHENTICATED_ROLE_NAME = "AuthenticatedGroup";
-
     private Domain openSearchDomain;
     private CfnParameter dataNodeEBSVolumeSize;
     private CfnParameter nodeType;
@@ -49,11 +42,11 @@ public class DashboardsOpenSearchStack extends Stack {
 
         FirehoseNestedStackProps firehoseNestedStackProps = new FirehoseNestedStackProps(this.openSearchDomain);
 
-        DashboardsFirehoseStack firehoseStack = new DashboardsFirehoseStack(this, "osdfw-firehose-stack", firehoseNestedStackProps);
+        DashboardsFirehoseStack firehoseStack = new DashboardsFirehoseStack(this, "Stream", firehoseNestedStackProps);
 
-        DashboardsAppStack dashboardsAppStack = new DashboardsAppStack(this, "osdfw-app-stack", firehoseNestedStackProps);
+        DashboardsAppStack dashboardsAppStack = new DashboardsAppStack(this, "App", firehoseNestedStackProps);
 
-        CfnOutput output = CfnOutput.Builder.create(this, "osdfw-dash-link")
+        CfnOutput output = CfnOutput.Builder.create(this, "osdfwDashLink")
                 .description("Your link to the OpenSearch WAF Dashboard")
                 .value("https://" + openSearchDomain.getDomainEndpoint() + "/_dashboards")
                 .build();
@@ -61,34 +54,34 @@ public class DashboardsOpenSearchStack extends Stack {
     }
 
     private void createParameters() {
-        this.dataNodeEBSVolumeSize = CfnParameter.Builder.create(this, "osdfw-os-ebs-size")
+        this.dataNodeEBSVolumeSize = CfnParameter.Builder.create(this, "osdfwOsEbsSize")
                 .type("Number")
                 .defaultValue("10")
                 .description("OpenSearch volume disk size")
                 .build();
 
-        this.nodeType = CfnParameter.Builder.create(this, "osdfw-os-node-size")
+        this.nodeType = CfnParameter.Builder.create(this, "osdfwOsNodeSize")
                 .type("String")
                 .defaultValue(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.LARGE).toString())
                 //.allowedPattern(".*.search")
                 .description("OpenSearch Node type")
                 .build();
 
-        this.openSearchDomainName = CfnParameter.Builder.create(this, "osdfw-os-domain-name")
+        this.openSearchDomainName = CfnParameter.Builder.create(this, "osdfwOsDomainName")
                 .type("String")
-                .defaultValue("osdfw-domain" + this.getStackId())
+                .defaultValue("osdfw-opensearch-domain")
                 .description("OpenSearch Domain Name")
                 .build();
 
-        this.userEmail = CfnParameter.Builder.create(this, "osdfw-dashboards-admin-email")
+        this.userEmail = CfnParameter.Builder.create(this, "osdfwDashboardsAdminEmail")
                 .type("String")
                 .defaultValue("your@email.com")
                 .description("Dashboard user e-mail address")
                 .build();
 
-        this.cognitoDomainName = CfnParameter.Builder.create(this, "osdfw-cognito-domain")
+        this.cognitoDomainName = CfnParameter.Builder.create(this, "osdfwCognitoDomain")
                 .type("String")
-                .defaultValue("osdfw-cognito-domain" + this.getStackId())
+                .defaultValue("osdfwdomain")
                 //todo lowercase only allowed
                 .description("Name for Cognito Domain")
                 .build();
@@ -110,7 +103,7 @@ public class DashboardsOpenSearchStack extends Stack {
                                 this)))
                 .build();
 
-        this.openSearchDomain = Domain.Builder.create(this, "osdfw-os-domain")
+        this.openSearchDomain = Domain.Builder.create(this, "osdfwOpensearchDomain")
                 .domainName(openSearchDomainName.getValueAsString())
                 .version(EngineVersion.OPENSEARCH_1_0)
                 .capacity(CapacityConfig.builder()
@@ -133,14 +126,15 @@ public class DashboardsOpenSearchStack extends Stack {
                 .accessPolicies(Collections.singletonList(openSearchPolicy))
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+
+
     }
 
     public void configureCognito() {
         IManagedPolicy awsOpenSearchCognitoAccessPolicy = ManagedPolicy.fromAwsManagedPolicyName("AmazonOpenSearchServiceCognitoAccess");
 
         //Create cognito user pool
-        this.userPool = UserPool.Builder.create(this, "osdfw-user-pool")
-                .userPoolName(Helper.buildName(NAME_PREFIX, COGNITO_USER_POOL_NAME, this.getStackId()))
+        this.userPool = UserPool.Builder.create(this, "osdfwUserPool")
                 .accountRecovery(AccountRecovery.EMAIL_ONLY)
                 .standardAttributes(StandardAttributes.builder()
                         .email(StandardAttribute.builder()
@@ -159,20 +153,18 @@ public class DashboardsOpenSearchStack extends Stack {
                 .build();
 
         //Set Cognito Domain
-        CfnUserPoolDomain.Builder.create(this, DOMAIN_SETTER)
+        CfnUserPoolDomain.Builder.create(this, "osdfwDomainSetter")
                 .domain(cognitoDomainName.getValueAsString())
                 .userPoolId(userPool.getUserPoolId())
                 .build();
 
         //Create Identity pool
-        this.identityPool = CfnIdentityPool.Builder.create(this, COGNITO_IDENTITY_POOL_NAME)
-                .identityPoolName(Helper.buildName(NAME_PREFIX, COGNITO_IDENTITY_POOL_NAME, this.getStackId()))
+        this.identityPool = CfnIdentityPool.Builder.create(this, "osdfwIdentityPool")
                 .allowUnauthenticatedIdentities(false)
                 .build();
 
         //Build Identity Pool role
-        this.authenticatedUserRole = Role.Builder.create(this, COGNITO_AUTHENTICATED_IP_ROLE_NAME)
-                .roleName(Helper.buildName(NAME_PREFIX, COGNITO_AUTHENTICATED_IP_ROLE_NAME, this.getStackId()))
+        this.authenticatedUserRole = Role.Builder.create(this, "osdfwCognitoAuthenticatedIdentityPoolRole")
                 .assumedBy(
                         new WebIdentityPrincipal("cognito-identity.amazonaws.com",
                                 Map.of(
@@ -183,13 +175,13 @@ public class DashboardsOpenSearchStack extends Stack {
                 .build();
 
         //Attach role to IP
-        CfnIdentityPoolRoleAttachment.Builder.create(this, "identityPoolRoleAttachement")
+        CfnIdentityPoolRoleAttachment.Builder.create(this, "osdfwIdentityPoolRoleAttachment")
                 .identityPoolId(identityPool.getRef())
                 .roles(Map.of("authenticated", this.authenticatedUserRole.getRoleArn()))
                 .build();
 
         //Create admin user with a password passed as a parameter to the stack
-        CfnUserPoolUser.Builder.create(this, "AdminCognitoUser")
+        CfnUserPoolUser.Builder.create(this, "osdfwAdminUser")
                 .userPoolId(userPool.getUserPoolId())
                 .forceAliasCreation(true)
                 .username(userEmail.getValueAsString())
@@ -200,8 +192,7 @@ public class DashboardsOpenSearchStack extends Stack {
                 .build();
 
         //Lastly attach a role to authenticated users
-        this.cognitoUserRole = Role.Builder.create(this, COGNITO_AUTHENTICATED_ROLE_NAME)
-                .roleName(Helper.buildName(NAME_PREFIX, COGNITO_AUTHENTICATED_ROLE_NAME, this.getStackId()))
+        this.cognitoUserRole = Role.Builder.create(this, "osdfwCognitoAuthenticatedUserRole")
                 .description("Role attached to Cognito authenticated users")
                 .maxSessionDuration(Duration.hours(2))
                 .managedPolicies(Collections.singletonList(awsOpenSearchCognitoAccessPolicy))

@@ -10,6 +10,7 @@ import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.amazon.awscdk.services.iam.*;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.*;
+import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.constructs.Construct;
 
@@ -28,11 +29,11 @@ public class DashboardsAppStack extends NestedStack {
 
         Role customizerRole = createLambdaRole();
 
-        this.dashboardsCustomizerLambda = Function.Builder.create(this, "dashboardsCustomizerLambda")
+        this.dashboardsCustomizerLambda = Function.Builder.create(this, "osdfwDashboardsSeeder")
                 .architecture(Architecture.ARM_64)
                 .description("AWS WAF Dashboards Solution main function")
-                .functionName("dashboardsCustomizerLambda")
-                .handler("src/lambda_function.handler")
+                .handler("lambda_function.handler")
+                .logRetention(RetentionDays.ONE_MONTH)
                 .role(customizerRole) //todo
                 .code(lambdaCodeLocation)
                 .runtime(Runtime.PYTHON_3_9)
@@ -47,11 +48,11 @@ public class DashboardsAppStack extends NestedStack {
 
         createCustomizer(dashboardsCustomizerLambda, props);
 
-        Function customizerUpdaterLambda = Function.Builder.create(this, "customizerUpdaterLambda")
+        Function customizerUpdaterLambda = Function.Builder.create(this, "osdfwDashboardsUpdater")
                 .architecture(Architecture.ARM_64)
                 .description("AWS WAF Dashboards Solution updater function")
-                .functionName("dashboardsUpdaterLambda")
-                .handler("src/lambda_function.update")
+                .handler("lambda_function.update")
+                .logRetention(RetentionDays.ONE_MONTH)
                 .role(customizerRole) //todo
                 .code(lambdaCodeLocation)
                 .runtime(Runtime.PYTHON_3_9)
@@ -78,9 +79,8 @@ public class DashboardsAppStack extends NestedStack {
     }
 
     private List<Rule> createEvents(Function targetLambdaFn) {
-        Rule newAclsForWafV2 = Rule.Builder.create(this, "newAclsForWafV2")
+        Rule newAclsForWafV2 = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv2")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAFv2.")
-                .ruleName("awafd-waf2-detect-acls")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.wafv2"))
                         .detailType(List.of("AWS API Call via CloudTrail"))
@@ -93,9 +93,9 @@ public class DashboardsAppStack extends NestedStack {
                 .enabled(true)
                 .build();
 
-        Rule newAclsRulesForWafRegional = Rule.Builder.create(this, "newAclsRulesForWafRegional")
+        // todo add conditional parameter to disable waf v1 capabilities
+        Rule newAclsRulesForWafRegional = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Regional")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAF Regional.")
-                .ruleName("awafd-waf-detect-acls-rules-regional")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.waf-regional"))
                         .detailType(List.of("AWS API Call via CloudTrail"))
@@ -108,9 +108,8 @@ public class DashboardsAppStack extends NestedStack {
                 .enabled(true)
                 .build();
 
-        Rule newAclsRulesForWafGlobal = Rule.Builder.create(this, "newAclsForWafGlocal")
+        Rule newAclsRulesForWafGlobal = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Global")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAF Global.")
-                .ruleName("awafd-waf-detect-acls-rules-global")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.waf"))
                         .detailType(List.of("AWS API Call via CloudTrail"))
@@ -131,7 +130,8 @@ public class DashboardsAppStack extends NestedStack {
         PolicyStatement policyStatement = PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(List.of(
-                        "es:UpdateElasticsearchDomainConfig",
+                        "es:*",
+                        //"es:UpdateElasticsearchDomainConfig",
                         "logs:CreateLogGroup",
                         "logs:CreateLogStream",
                         "logs:PutLogEvents",
@@ -152,22 +152,20 @@ public class DashboardsAppStack extends NestedStack {
                 .resources(List.of("*"))
                 .build();
 
-        ManagedPolicy policy = ManagedPolicy.Builder.create(this, "awafd-customizer-lambda-policy")
-                .managedPolicyName("awafd-customizer-lambda-policy")
+        ManagedPolicy policy = ManagedPolicy.Builder.create(this, "osdfwCustomizerLambdaPolicy")
                 .statements(List.of(policyStatement))
                 .build();
 
-        return Role.Builder.create(this, "awd-lambda-role")
+        return Role.Builder.create(this, "osdfwCustomizerLambdaRole")
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .description("AWS WAF Dashboards Lambda role")
-                .roleName("awafd-customizer-lambda-role")
                 .managedPolicies(List.of(policy))
                 .build();
 
     }
 
     public void createCustomizer(Function dashboardsCustomizerLambda, FirehoseNestedStackProps props) {
-        CustomResource.Builder.create(this, "dashboardsCustomizer")
+        CustomResource.Builder.create(this, "osdfwCustomResourceLambda")
                 .serviceToken(dashboardsCustomizerLambda.getFunctionArn())
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .properties(Map.of(

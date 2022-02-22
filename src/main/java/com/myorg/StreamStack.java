@@ -14,20 +14,18 @@ import software.amazon.awscdk.services.opensearchservice.Domain;
 import software.amazon.awscdk.services.s3.Bucket;
 
 import java.util.List;
-import java.util.UUID;
 
-public class DashboardsFirehoseStack extends NestedStack {
+public class StreamStack extends NestedStack {
     LogGroup cwLogGroup;
-    LogStream openSearchStream;
-    LogStream s3logStream;
+    LogStream cwLogStreamOpenSearch;
+    LogStream cwLogStreamS3;
     Role firehoseRole;
 
-    public DashboardsFirehoseStack(final Construct scope, final String id, FirehoseNestedStackProps firehoseNestedStackProps) {
-        super(scope, id, firehoseNestedStackProps);
+    public StreamStack(final Construct scope, final String id, StreamStackProps streamStackProps) {
+        super(scope, id, streamStackProps);
 
         //todo parametrise
         String wafIndexName = "awswaf";
-        String wafIndexTypeName = "waflog";
         int streamBufferSize = 5;
         int streamBufferTimeInterval = 60;
 
@@ -38,7 +36,7 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .removalPolicy(RemovalPolicy.RETAIN)
                 .build();
 
-        this.firehoseRole = generateFirehoseRole(firehoseNestedStackProps, logDeliveryBucket);
+        this.firehoseRole = generateFirehoseRole(streamStackProps, logDeliveryBucket);
 
         CfnDeliveryStream.ElasticsearchDestinationConfigurationProperty openSearchDestinationForFirehose = CfnDeliveryStream.ElasticsearchDestinationConfigurationProperty.builder()
                 .bufferingHints(CfnDeliveryStream.ElasticsearchBufferingHintsProperty.builder()
@@ -48,9 +46,9 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .cloudWatchLoggingOptions(CfnDeliveryStream.CloudWatchLoggingOptionsProperty.builder()
                         .enabled(true)
                         .logGroupName(this.cwLogGroup.getLogGroupName())
-                        .logStreamName(this.openSearchStream.getLogStreamName())
+                        .logStreamName(this.cwLogStreamOpenSearch.getLogStreamName())
                         .build())
-                .domainArn(firehoseNestedStackProps.getOpenSearchDomain().getDomainArn())
+                .domainArn(streamStackProps.getOpenSearchDomain().getDomainArn())
                 .indexName(wafIndexName)
                 .indexRotationPeriod("OneDay")
                 .retryOptions(CfnDeliveryStream.ElasticsearchRetryOptionsProperty.builder().durationInSeconds(60).build())
@@ -68,24 +66,24 @@ public class DashboardsFirehoseStack extends NestedStack {
                         .cloudWatchLoggingOptions(CfnDeliveryStream.CloudWatchLoggingOptionsProperty.builder()
                                 .enabled(true)
                                 .logGroupName(this.cwLogGroup.getLogGroupName())
-                                .logStreamName(this.s3logStream.getLogStreamName())
+                                .logStreamName(this.cwLogStreamS3.getLogStreamName())
                                 .build())
                         .build())
                 .build();
 
 
         CfnDeliveryStream wafLogsDeliveryStream = CfnDeliveryStream.Builder.create(this, "osdfwWafFirehoseDeliveryStream")
-                //.deliveryStreamName("waf-logs-delivery-stream") //todo parematerise
+                .deliveryStreamName("aws-waf-logs-osdfw")
                 .deliveryStreamType("DirectPut")
                 .elasticsearchDestinationConfiguration(openSearchDestinationForFirehose)
                 .build();
 
 
-        CfnOutput output = CfnOutput.Builder.create(this, "osdfwVarOsDomain")
-                .value(firehoseNestedStackProps.getOpenSearchDomain().getDomainArn())
+        CfnOutput.Builder.create(this, "osdfwVarOsDomain")
+                .value(streamStackProps.getOpenSearchDomain().getDomainArn())
                 .build();
 
-        CfnOutput firehoseArn = CfnOutput.Builder.create(this, "osdfwFirehoseArn")
+        CfnOutput.Builder.create(this, "osdfwFirehoseArn")
                 .description("Firehose ARN")
                 .value(wafLogsDeliveryStream.getAttrArn())
                 .build();
@@ -98,18 +96,18 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .retention(RetentionDays.ONE_MONTH)
                 .build();
 
-        this.s3logStream = LogStream.Builder.create(this, "osdfwS3Delivery")
+        this.cwLogStreamS3 = LogStream.Builder.create(this, "osdfwS3Delivery")
                 .logGroup(cwLogGroup)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
-        this.openSearchStream = LogStream.Builder.create(this, "osdfwOsDelivery")
+        this.cwLogStreamOpenSearch = LogStream.Builder.create(this, "osdfwOsDelivery")
                 .logGroup(cwLogGroup)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
     }
 
-    public Role generateFirehoseRole(FirehoseNestedStackProps firehoseNestedStackProps, Bucket logDeliveryBucket) {
+    public Role generateFirehoseRole(StreamStackProps streamStackProps, Bucket logDeliveryBucket) {
         Role firehoseRole = Role.Builder.create(this, "osdfwLogDeliveryRole")
                 .managedPolicies(List.of(ManagedPolicy.fromAwsManagedPolicyName("AdministratorAccess"))) //todo
                 .description("Role for WAF Dashboards log delivery")
@@ -117,7 +115,7 @@ public class DashboardsFirehoseStack extends NestedStack {
                 .build();
 
         ManagedPolicy.Builder.create(this, "osdfwFirehosePolicy")
-                .statements(generatePolicyStatements(firehoseNestedStackProps.getOpenSearchDomain(), logDeliveryBucket))
+                .statements(generatePolicyStatements(streamStackProps.getOpenSearchDomain(), logDeliveryBucket))
                 .roles(List.of(firehoseRole))//todo
                 .build();
 

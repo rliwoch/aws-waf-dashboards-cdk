@@ -3,10 +3,10 @@ package com.myorg;
 import software.amazon.awscdk.core.NestedStackProps;
 import software.amazon.awscdk.services.opensearchservice.Domain;
 
-public class FirehoseNestedStackProps implements NestedStackProps {
+public class StreamStackProps implements NestedStackProps {
     private final Domain openSearchDomain;
 
-    public FirehoseNestedStackProps(Domain openSearchDomain) {
+    public StreamStackProps(Domain openSearchDomain) {
         this.openSearchDomain = openSearchDomain;
     }
 

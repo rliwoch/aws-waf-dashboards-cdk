@@ -13,7 +13,7 @@ import software.amazon.awscdk.services.opensearchservice.*;
 import java.util.Collections;
 import java.util.Map;
 
-public class DashboardsOpenSearchStack extends Stack {
+public class MainStack extends Stack {
     private Domain openSearchDomain;
     private CfnParameter dataNodeEBSVolumeSize;
     private CfnParameter nodeType;
@@ -27,11 +27,11 @@ public class DashboardsOpenSearchStack extends Stack {
     private Role authenticatedUserRole;
 
 
-    public DashboardsOpenSearchStack(final Construct scope, final String id) {
+    public MainStack(final Construct scope, final String id) {
         this(scope, id, null);
     }
 
-    public DashboardsOpenSearchStack(final Construct scope, final String id, final StackProps props) {
+    public MainStack(final Construct scope, final String id, final StackProps props) {
         super(scope, id, props);
 
         createParameters();
@@ -40,13 +40,11 @@ public class DashboardsOpenSearchStack extends Stack {
 
         deployOpenSearch();
 
-        FirehoseNestedStackProps firehoseNestedStackProps = new FirehoseNestedStackProps(this.openSearchDomain);
+        StreamStackProps streamStackProps = new StreamStackProps(this.openSearchDomain);
+        new StreamStack(this, "Stream", streamStackProps);
+        new AppStack(this, "App", streamStackProps);
 
-        DashboardsFirehoseStack firehoseStack = new DashboardsFirehoseStack(this, "Stream", firehoseNestedStackProps);
-
-        DashboardsAppStack dashboardsAppStack = new DashboardsAppStack(this, "App", firehoseNestedStackProps);
-
-        CfnOutput output = CfnOutput.Builder.create(this, "osdfwDashLink")
+        CfnOutput.Builder.create(this, "osdfwDashLink")
                 .description("Your link to the OpenSearch WAF Dashboard")
                 .value("https://" + openSearchDomain.getDomainEndpoint() + "/_dashboards")
                 .build();

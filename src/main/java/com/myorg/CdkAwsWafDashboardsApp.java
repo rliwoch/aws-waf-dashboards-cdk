@@ -37,7 +37,7 @@ public class CdkAwsWafDashboardsApp {
                 .build());*/
 
         String stackName = "OpenSearch Dashboards for WAF";
-        DashboardsOpenSearchStack openSearch = new DashboardsOpenSearchStack(app, "OSDfW", StackProps.builder().build());
+        MainStack openSearch = new MainStack(app, "OSDfW", StackProps.builder().build());
         //Stack firehose = new DashboardsFirehoseStack(this, "DashboardsFirehoseStack", new FirehoseNestedStackProps(this).);
 
         app.synth();

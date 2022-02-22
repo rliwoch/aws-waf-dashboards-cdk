@@ -18,10 +18,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-public class DashboardsAppStack extends NestedStack {
+public class AppStack extends NestedStack {
     public Function dashboardsCustomizerLambda;
 
-    public DashboardsAppStack(Construct scope, String id, FirehoseNestedStackProps props) {
+    public AppStack(Construct scope, String id, StreamStackProps props) {
         super(scope, id, props);
 
         //Code lambdaCodeLocation = Code.fromAsset("assets/os-customizer-lambda.zip");
@@ -79,7 +79,7 @@ public class DashboardsAppStack extends NestedStack {
     }
 
     private List<Rule> createEvents(Function targetLambdaFn) {
-        Rule newAclsForWafV2 = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv2")
+        Rule newACLForWafV2 = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv2")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAFv2.")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.wafv2"))
@@ -94,7 +94,7 @@ public class DashboardsAppStack extends NestedStack {
                 .build();
 
         // todo add conditional parameter to disable waf v1 capabilities
-        Rule newAclsRulesForWafRegional = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Regional")
+        Rule newACLRulesForWafRegional = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Regional")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAF Regional.")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.waf-regional"))
@@ -108,7 +108,7 @@ public class DashboardsAppStack extends NestedStack {
                 .enabled(true)
                 .build();
 
-        Rule newAclsRulesForWafGlobal = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Global")
+        Rule newACLRulesForWafGlobal = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Global")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAF Global.")
                 .eventPattern(EventPattern.builder()
                         .source(List.of("aws.waf"))
@@ -122,7 +122,7 @@ public class DashboardsAppStack extends NestedStack {
                 .enabled(true)
                 .build();
 
-        return List.of(newAclsRulesForWafRegional, newAclsRulesForWafGlobal, newAclsForWafV2);
+        return List.of(newACLRulesForWafRegional, newACLRulesForWafGlobal, newACLForWafV2);
     }
 
     private Role createLambdaRole() {
@@ -164,7 +164,7 @@ public class DashboardsAppStack extends NestedStack {
 
     }
 
-    public void createCustomizer(Function dashboardsCustomizerLambda, FirehoseNestedStackProps props) {
+    public void createCustomizer(Function dashboardsCustomizerLambda, StreamStackProps props) {
         CustomResource.Builder.create(this, "osdfwCustomResourceLambda")
                 .serviceToken(dashboardsCustomizerLambda.getFunctionArn())
                 .removalPolicy(RemovalPolicy.DESTROY)

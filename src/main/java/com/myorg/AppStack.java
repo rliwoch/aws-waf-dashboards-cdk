@@ -24,8 +24,8 @@ public class AppStack extends NestedStack {
     public AppStack(Construct scope, String id, StreamStackProps props) {
         super(scope, id, props);
 
-        //Code lambdaCodeLocation = Code.fromAsset("assets/os-customizer-lambda.zip");
-        Code lambdaCodeLocation = Code.fromBucket(Bucket.fromBucketArn(this, "id", "arn:aws:s3:::aws-waf-dashboard-resources"), "os-customizer-lambda.zip");
+        Code lambdaCodeLocation = Code.fromAsset("assets/os-customizer-lambda.zip");
+        //Code lambdaCodeLocation = Code.fromBucket(Bucket.fromBucketArn(this, "id", "arn:aws:s3:::aws-waf-dashboard-resources"), "os-customizer-lambda.zip");
 
         Role customizerRole = createLambdaRole();
 

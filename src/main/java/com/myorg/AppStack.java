@@ -93,7 +93,7 @@ public class AppStack extends NestedStack {
                 .enabled(true)
                 .build();
 
-        // todo add conditional parameter to disable waf v1 capabilities
+        //todo add conditional parameter to disable waf v1 capabilities
         Rule newACLRulesForWafRegional = Rule.Builder.create(this, "osdfwCaptureNewAclsWafv1Regional")
                 .description("AWS WAF Dashboards Solution - detects new WebACLs and rules for WAF Regional.")
                 .eventPattern(EventPattern.builder()

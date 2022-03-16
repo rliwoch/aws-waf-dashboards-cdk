@@ -58,10 +58,10 @@ public class MainStack extends Stack {
                 .description("OpenSearch volume disk size")
                 .build();
 
+        //todo add dropdown and OS setup
         this.nodeType = CfnParameter.Builder.create(this, "osdfwOsNodeSize")
                 .type("String")
                 .defaultValue(InstanceType.of(InstanceClass.MEMORY6_GRAVITON, InstanceSize.LARGE).toString())
-                //.allowedPattern(".*.search")
                 .description("OpenSearch Node type")
                 .build();
 
